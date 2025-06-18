@@ -1,0 +1,123 @@
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Variable to track if accessories have been added
+local accessoriesAdded = false
+
+-- Function to remove all accessories
+local function removeAllAccessories()
+    -- Only remove accessories the first time
+    if accessoriesAdded then
+        return
+    end
+
+    -- Iterate through all accessories and destroy them
+    for _, v in pairs(character:GetChildren()) do
+        if v:IsA("Accessory") then
+            v:Destroy() -- Remove the accessory
+        end
+    end
+
+    -- Check for accessories attached to specific parts (Head, Neck, etc.)
+    for _, v in pairs(character:GetDescendants()) do
+        if v:IsA("Accessory") then
+            v:Destroy() -- Destroy accessories attached through welds or attachments
+        end
+    end
+end
+
+-- Function to apply a new accessory
+local function applyAccessory(assetId)
+    -- First, remove all existing accessories
+    removeAllAccessories()
+
+    -- Load the new accessory
+    local accessory = game:GetObjects("rbxassetid://" .. assetId)[1]
+    if accessory and accessory:IsA("Accessory") then
+        accessory.Parent = character -- Parent the accessory to the character
+
+        -- Manually attach the accessory if necessary
+        local handle = accessory:FindFirstChild("Handle")
+        if handle then
+            local attachment = handle:FindFirstChildOfClass("Attachment")
+            if attachment then
+                local characterAttachment = character:FindFirstChild(attachment.Name, true)
+                if characterAttachment then
+                    local weld = Instance.new("Weld")
+                    weld.Part0 = handle
+                    weld.Part1 = characterAttachment.Parent
+                    weld.C0 = attachment.CFrame
+                    weld.C1 = characterAttachment.CFrame
+                    weld.Parent = handle
+                end
+            end
+        end
+    else
+        warn("Failed to load accessory:", assetId)
+    end
+
+    -- Mark that accessories have been added
+    accessoriesAdded = true
+end
+
+-- Example usage: Apply the new accessories
+applyAccessory(15480443797) -- Face accessory
+applyAccessory(15029874730) -- Hair accessory
+
+-- Function to apply clothing
+local function applyClothing(assetId, classType)
+    -- Remove any existing clothing of the specified class type (Shirt/Pants)
+    for _, v in pairs(character:GetChildren()) do
+        if v:IsA(classType) then
+            v:Destroy() -- Remove the old clothing
+        end
+    end
+
+    -- Load and apply new clothing
+    local asset = game:GetObjects("rbxassetid://" .. assetId)[1]
+    if asset and asset:IsA(classType) then
+        asset.Parent = character
+    end
+end
+
+applyClothing(14705521242, "Shirt") -- Shirt
+applyClothing(14705523524, "Pants") -- Pants
+
+-- Function to set skin tone
+local function setSkinTone(color)
+    if not character then return end
+
+    for _, part in pairs(character:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "Handle" then
+            part.BrickColor = BrickColor.new(color) -- Set skin tone color
+        end
+    end
+end
+
+-- Example usage: Change skin tone to Light orange
+setSkinTone("Light orange")
+
+local player = game.Players.LocalPlayer
+
+local function makeAccessoriesNonCollidable(character)
+    for _, accessory in pairs(character:GetChildren()) do
+        if accessory:IsA("Accessory") then
+            local handle = accessory:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                handle.CanCollide = false
+                handle.Massless = true
+            end
+        end
+    end
+end
+
+-- Run on current character
+if player.Character then
+    makeAccessoriesNonCollidable(player.Character)
+end
+
+-- Run again when character respawns
+player.CharacterAdded:Connect(function(char)
+    char:WaitForChild("Humanoid")
+    makeAccessoriesNonCollidable(char)
+end)
