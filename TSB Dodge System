@@ -1,0 +1,120 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HRP = Character:WaitForChild("HumanoidRootPart")
+
+-- M1 animation IDs
+local m1Anims = {
+    "10469493270", "10469630950", "10469639222", "10469643643",
+    "13532562418", "13532600125", "13532604085", "13294471966",
+    "13491635433", "13296577783", "13295919399", "13295936866",
+    "13370310513", "13390230973", "13378751717", "13378708199",
+    "14004222985", "13997092940", "14001963401", "14136436157",
+    "15259161390", "15240216931", "15240176873", "15162694192",
+    "16515503507", "16515520431", "16515448089", "16552234590",
+    "17889458563", "17889461810", "17889471098", "17889290569",
+    "123005629431309", "100059874351664", "104895379416342", "134775406437626",
+    "17325510002", "17325510002", "17325522388", "17325537719",
+    "10503381238", "10471336737", "12296882427", "115484690572880", "13376869471",
+    "14351441234", "14900168720", "15145462680", "16062410809", "16082123712", "16139402582",
+    "16431491215", "17860467628", "17450393107", "17275150809", "17799224866",
+    "17857788598", "77509627104305", ""
+}
+
+-- Dodge animations in order
+local dodgeAnims = {
+    "rbxassetid://134711731729986", -- Dodge 1
+    "rbxassetid://127015697036075", -- Dodge 2
+    "rbxassetid://133094662049155", -- Dodge 3
+    "rbxassetid://128188725134114",  -- Dodge 4
+    "rbxassetid://78339272602733",  -- Dodge 5
+    "rbxassetid://76963965406296",  -- Dodge 6
+    "rbxassetid://92546791251633",  -- Dodge 7
+}
+
+local dodgeIndex = 1
+local holdingF = false
+local lastHealth = Humanoid.Health
+local currentDodgeTrack = nil
+local lastM1ByPlayer = {} -- Player.UserId -> last detected M1 ID
+
+-- Detect F key input
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.F then
+        holdingF = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.F then
+        holdingF = false
+    end
+end)
+
+local function isM1Anim(animId)
+    for _, id in ipairs(m1Anims) do
+        if tostring(animId) == id then
+            return true
+        end
+    end
+    return false
+end
+
+local function playDodge()
+    if currentDodgeTrack then currentDodgeTrack:Stop() end
+
+    local anim = Instance.new("Animation")
+    anim.AnimationId = dodgeAnims[dodgeIndex]
+
+    local track = Humanoid:LoadAnimation(anim)
+    currentDodgeTrack = track
+    track:Play()
+
+    -- ✅ Increment AFTER playing
+    dodgeIndex += 1
+    if dodgeIndex > #dodgeAnims then dodgeIndex = 1 end
+
+    track.Stopped:Connect(function()
+        if currentDodgeTrack == track then
+            currentDodgeTrack = nil
+        end
+    end)
+end
+
+-- Dodge detection loop
+RunService.RenderStepped:Connect(function()
+    if not Character or not HRP or not holdingF then return end
+
+    local currentHealth = Humanoid.Health
+    if currentHealth < lastHealth then
+        lastHealth = currentHealth
+        return
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local theirHRP = player.Character.HumanoidRootPart
+            if (HRP.Position - theirHRP.Position).Magnitude <= 10 then
+                local theirHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if theirHumanoid then
+                    for _, track in theirHumanoid:GetPlayingAnimationTracks() do
+                        local animId = string.match(track.Animation.AnimationId, "%d+")
+                        if isM1Anim(animId) then
+                            local lastAnim = lastM1ByPlayer[player.UserId]
+                            if lastAnim ~= animId then
+                                lastM1ByPlayer[player.UserId] = animId
+                                playDodge()
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    lastHealth = currentHealth
+end)
